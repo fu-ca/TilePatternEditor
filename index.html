@@ -53,7 +53,23 @@
     border: none;
     cursor: pointer;
   }
-  
+
+  .drawBtn {
+  background: #219ebc;
+  color: #fff;
+  font-size: 18px;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  margin: 12px 0;
+  cursor: pointer;
+}
+
+.drawBtn:hover {
+  opacity: 0.9;
+}
+
+
   /* ===== スマホ対応 ===== */
 @media (max-width: 768px) {
 
@@ -102,7 +118,16 @@
 }
 </style>
 </head>
+
 <body>
+  <h1 style="
+  text-align:center;
+  margin:16px 0;
+  font-size:28px;
+">
+  タイルパターンエディタ
+</h1>
+
 
 <div class="box">
   <h3>このサイトについて</h3>
@@ -206,8 +231,11 @@
 
 <h3>描画設定</h3>
 横 <input type="number" id="drawCols" value="5" min="1">
-縦 <input type="number" id="drawRows" value="4" min="1">
-<button onclick="draw()">描画</button><br>
+縦 <input type="number" id="drawRows" value="4" min="1"><br>
+<button class="drawBtn" onclick="draw()">描画</button><br>
+
+<button onclick="downloadPattern(true)">透過ありでダウンロード</button>
+<button onclick="downloadPattern(false)">透過なしでダウンロード</button><br>
 
 <canvas id="canvas"></canvas>
 
@@ -380,8 +408,57 @@ function exportImage(){
   }
 }
 
-
 function toggleDrawArea(){ drawArea.style.display = drawArea.style.display === "none" ? "block" : "none"; }
+
+function downloadPattern(transparent = true) {
+  const srcCanvas = document.getElementById("canvas");
+
+  if (!srcCanvas.width || !srcCanvas.height) {
+    alert("先に描画してください");
+    return;
+  }
+
+  let exportCanvas = srcCanvas;
+
+  // 透過なし用：一時キャンバス作成
+  if (!transparent) {
+    const temp = document.createElement("canvas");
+    temp.width = srcCanvas.width;
+    temp.height = srcCanvas.height;
+    const tctx = temp.getContext("2d");
+
+    // 背景色（白）
+    tctx.fillStyle = "#ffffff";
+    tctx.fillRect(0, 0, temp.width, temp.height);
+
+    // 元キャンバスを合成
+    tctx.drawImage(srcCanvas, 0, 0);
+
+    exportCanvas = temp;
+  }
+
+  const dataURL = exportCanvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = dataURL;
+  a.download = transparent
+    ? "tile-pattern-transparent.png"
+    : "tile-pattern-whitebg.png";
+
+  // iOS / Safari 対策
+  if (typeof a.download === "undefined") {
+    const w = window.open();
+    w.document.write(`
+      <img src="${dataURL}" style="width:100%">
+      <p style="text-align:center">長押しして保存</p>
+    `);
+    w.document.title = "画像を保存";
+  } else {
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+}
+
 </script>
 </body>
 </html>
