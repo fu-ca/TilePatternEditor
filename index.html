@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>タイルパターンエディタ</title>
 <style>
   body { font-family: sans-serif; line-height: 1.6; }
@@ -53,6 +53,53 @@
     border: none;
     cursor: pointer;
   }
+  
+  /* ===== スマホ対応 ===== */
+@media (max-width: 768px) {
+
+  body {
+    font-size: 14px;
+  }
+
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .toolbar button {
+    width: 48px;
+    height: 40px;
+    font-size: 12px;
+  }
+
+  .cell {
+    width: 48px;
+    height: 48px;
+    font-size: 12px;
+  }
+
+  #drawCanvas {
+    width: 192px !important;
+    height: 192px !important;
+  }
+
+  #previewCanvas {
+    width: 96px !important;
+    height: 96px !important;
+  }
+
+  .box {
+    padding: 10px;
+  }
+
+  input[type="number"],
+  input[type="range"],
+  input[type="color"],
+  button {
+    width: 100%;
+    margin: 4px 0;
+  }
+}
 </style>
 </head>
 <body>
@@ -314,7 +361,25 @@ drawCanvas.addEventListener("touchmove", e => { e.preventDefault(); if(!drawing)
 drawCanvas.addEventListener("touchend", () => drawing=false);
 
 function useDrawImage(){ img = new Image(); img.src = drawCanvas.toDataURL(); alert("描画画像を使用します"); }
-function exportImage(){ const a=document.createElement("a"); a.href=drawCanvas.toDataURL(); a.download="pattern.png"; a.click(); }
+function exportImage(){
+  const dataURL = drawCanvas.toDataURL("image/png");
+
+  // PC（ダウンロード対応）
+  const a = document.createElement("a");
+  a.href = dataURL;
+  a.download = "pattern.png";
+
+  // Safari対策
+  if (typeof a.download === "undefined") {
+    // スマホ：新しいタブで開く
+    const w = window.open();
+    w.document.write(`<img src="${dataURL}" style="width:100%">`);
+    w.document.title = "長押しして保存";
+  } else {
+    a.click();
+  }
+}
+
 
 function toggleDrawArea(){ drawArea.style.display = drawArea.style.display === "none" ? "block" : "none"; }
 </script>
