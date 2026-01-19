@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>タイルパターンエディタ</title>
+<style>
+  body { font-family: sans-serif; line-height: 1.6; }
+  canvas { border: 1px solid #444; margin-top: 10px; }
+
+  .grid {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .cell {
+    width: 64px;
+    height: 64px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    cursor: pointer;
+    color: #fff;
+    user-select: none;
+  }
+
+  .toolbar button {
+    width: 60px;
+    height: 36px;
+    margin: 3px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+  }
+
+  .active { outline: 3px solid #000; }
+
+  .box {
+    background: #f5f5f5;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+
+  #palette button {
+    width: 32px;
+    height: 32px;
+    margin: 4px;
+    border: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="box">
+  <h3>このサイトについて</h3>
+  <p>
+    64×64pxの画像を使い、<strong>回転・反転を組み合わせたタイルパターン</strong>を
+    直感的に作成できるツールです。
+  </p>
+
+  <h3>使い方（かんたん）</h3>
+  <ol>
+    <li>パターン用画像を読み込む、または描く</li>
+    <li>セルに回転・反転を設定する</li>
+    <li>描画回数を指定してパターンを生成</li>
+  </ol>
+
+  <button onclick="toggleDetail()">詳細を表示</button>
+
+  <!-- 詳細（最初は非表示） -->
+  <div id="detailArea" style="display:none; margin-top:12px;">
+
+    <h3>詳細説明</h3>
+
+    <p>
+      このサイトは、64×64pxのタイル画像を元に、
+      回転（0° / 90° / 180° / 270°）や
+      左右・上下反転を<strong>セルごとに自由に組み合わせ</strong>て
+      パターンを作成できるタイルパターンエディタです。
+    </p>
+
+    <p>
+      パターン用画像は、画像ファイルの読み込みだけでなく、
+      サイト内のドット描画キャンバスで直接描くこともできます。
+    </p>
+
+    <h4>詳しい使い方</h4>
+    <ol>
+      <li>パターン用画像を準備（読み込み or 描画）</li>
+      <li>セル数（横×縦）を設定</li>
+      <li>回転・反転ツールを選択</li>
+      <li>セルをクリックして設定を割り当て</li>
+      <li>描画設定で繰り返し回数を指定し描画</li>
+    </ol>
+
+    <p>
+      ※ セル設定は「配置の基本形」、描画設定は
+      「その基本形を何回繰り返すか」を決めます。
+    </p>
+
+    <button onclick="toggleDetail()">詳細を閉じる</button>
+  </div>
+</div>
+
+<h2>ファイルを選択</h2>
+
+<input type="file" id="imageInput" accept="image/*"><br><br>
+
+<div id="previewArea" style="display:none;">
+  <h3>画像プレビュー</h3>
+  <canvas id="previewCanvas" width="64" height="64"
+    style="border:1px solid #444; image-rendering:pixelated; width:128px; height:128px;">
+  </canvas>
+</div>
+
+<h2>パターン用画像を描く</h2>
+
+<div class="box">
+  <button onclick="toggleDrawArea()">折りたたみ</button><br><br>
+
+  <div id="drawArea">
+    <canvas id="drawCanvas" width="64" height="64"
+      style="border:1px solid #444; image-rendering:pixelated; width:256px; height:256px;"></canvas><br>
+
+    <label>色相環 <input type="color" id="colorWheel" value="#000000"></label><br>
+    <label>太さ <input type="range" id="brushSize" min="1" max="8" value="1"></label><br>
+
+    <div id="palette"></div>
+
+    <button onclick="setPen()">ペン</button>
+    <button onclick="setEraser()">消しゴム</button>
+    <button onclick="resetDrawCanvas()">リセット</button>
+    <button onclick="useDrawImage()">この画像を使う</button>
+    <button onclick="exportImage()">PNGエクスポート</button>
+  </div>
+</div>
+
+<h3>セル設定（編集用）</h3>
+横 <input type="number" id="cellCols" value="3" min="1">
+縦 <input type="number" id="cellRows" value="3" min="1">
+<button onclick="buildCells()">セル再生成</button>
+
+<h3>回転ツール</h3>
+<div class="toolbar" id="rotTools"></div>
+
+<h3>反転ツール</h3>
+<div class="toolbar">
+  <button id="flipXBtn">FX</button>
+  <button id="flipYBtn">FY</button>
+</div>
+
+<div id="cellGrid"></div>
+
+<h3>描画設定</h3>
+横 <input type="number" id="drawCols" value="5" min="1">
+縦 <input type="number" id="drawRows" value="4" min="1">
+<button onclick="draw()">描画</button><br>
+
+<canvas id="canvas"></canvas>
+
+<script>
+function toggleDetail() {
+  const d = document.getElementById("detailArea");
+  d.style.display = (d.style.display === "none") ? "block" : "none";
+}
+
+const CELL_SIZE = 64;
+
+const ROT_COLORS = { 0: "#cccccc", 90: "#8ecae6", 180: "#219ebc", 270: "#023047" };
+const FLIP_X_COLOR = "#ffb703";
+const FLIP_Y_COLOR = "#fb8500";
+
+let img = new Image();
+let cellStates = [];
+let currentTool = { rot: 0, flipX: false, flipY: false };
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  const previewArea = document.getElementById("previewArea");
+  const previewCanvas = document.getElementById("previewCanvas");
+  const pctx = previewCanvas.getContext("2d");
+  pctx.imageSmoothingEnabled = false;
+
+  document.getElementById("imageInput").onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    previewArea.style.display = "block";
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        pctx.clearRect(0, 0, 64, 64);
+        pctx.drawImage(tempImg, 0, 0, 64, 64);
+
+        img = new Image();
+        img.src = previewCanvas.toDataURL();
+      };
+      tempImg.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+});
+
+/* 回転ツール */
+[0, 90, 180, 270].forEach(r => {
+  const btn = document.createElement("button");
+  btn.textContent = r + "°";
+  btn.style.background = ROT_COLORS[r];
+  btn.onclick = () => { currentTool.rot = r; updateRotButtons(); };
+  rotTools.appendChild(btn);
+});
+function updateRotButtons() {
+  [...rotTools.children].forEach(b => b.classList.remove("active"));
+  [...rotTools.children].find(b => b.textContent === currentTool.rot + "°").classList.add("active");
+}
+
+flipXBtn.style.background = FLIP_X_COLOR;
+flipYBtn.style.background = FLIP_Y_COLOR;
+flipXBtn.onclick = () => flipXBtn.classList.toggle("active", currentTool.flipX = !currentTool.flipX);
+flipYBtn.onclick = () => flipYBtn.classList.toggle("active", currentTool.flipY = !currentTool.flipY);
+
+function buildCells() {
+  const cols = +cellCols.value, rows = +cellRows.value;
+  cellGrid.innerHTML = "";
+  cellGrid.className = "grid";
+  cellGrid.style.gridTemplateColumns = `repeat(${cols}, ${CELL_SIZE}px)`;
+  cellStates = [];
+  for (let i = 0; i < cols * rows; i++) {
+    const s = { rot: 0, flipX: false, flipY: false };
+    cellStates.push(s);
+    const d = document.createElement("div");
+    d.className = "cell";
+    updateCell(d, s);
+    d.onclick = () => { Object.assign(s, currentTool); updateCell(d, s); };
+    cellGrid.appendChild(d);
+  }
+}
+function updateCell(div, s) {
+  div.style.background = ROT_COLORS[s.rot];
+  div.textContent = s.rot + (s.flipX ? "X" : "") + (s.flipY ? "Y" : "");
+}
+
+function draw() {
+  if (!img.src) return alert("画像を選択してください");
+  const cCols = +cellCols.value, cRows = +cellRows.value;
+  const dCols = +drawCols.value, dRows = +drawRows.value;
+  canvas.width = dCols * CELL_SIZE;
+  canvas.height = dRows * CELL_SIZE;
+  const ctx = canvas.getContext("2d");
+  for (let y = 0; y < dRows; y++) for (let x = 0; x < dCols; x++) {
+    const s = cellStates[(y % cRows) * cCols + (x % cCols)];
+    ctx.save();
+    ctx.translate(x * CELL_SIZE + 32, y * CELL_SIZE + 32);
+    ctx.rotate(s.rot * Math.PI / 180);
+    ctx.scale(s.flipX ? -1 : 1, s.flipY ? -1 : 1);
+    ctx.drawImage(img, -32, -32, 64, 64);
+    ctx.restore();
+  }
+}
+
+updateRotButtons();
+buildCells();
+</script>
+
+<script>
+/* ===== 描画用キャンバス拡張 ===== */
+const drawCanvas = document.getElementById("drawCanvas");
+const dctx = drawCanvas.getContext("2d");
+dctx.imageSmoothingEnabled = false;
+
+let drawing = false;
+let currentColor = "#000000";
+let brush = 1;
+let mode = "pen";
+
+colorWheel.oninput = e => currentColor = e.target.value;
+brushSize.oninput = e => brush = +e.target.value;
+
+function setPen(){ mode = "pen"; }
+function setEraser(){ mode = "eraser"; }
+function resetDrawCanvas(){ dctx.clearRect(0,0,64,64); }
+
+function drawPixel(x,y){
+  if(mode === "eraser") dctx.clearRect(x,y,brush,brush);
+  else {
+    dctx.fillStyle = currentColor;
+    dctx.fillRect(x,y,brush,brush);
+  }
+}
+
+function getPos(e){
+  const r = drawCanvas.getBoundingClientRect();
+  return {
+    x: Math.floor((e.clientX - r.left) * 64 / r.width),
+    y: Math.floor((e.clientY - r.top) * 64 / r.height)
+  };
+}
+
+drawCanvas.onmousedown = e => { drawing=true; const p=getPos(e); drawPixel(p.x,p.y); };
+drawCanvas.onmousemove = e => { if(!drawing) return; const p=getPos(e); drawPixel(p.x,p.y); };
+window.onmouseup = () => drawing=false;
+
+drawCanvas.addEventListener("touchstart", e => { e.preventDefault(); drawing=true; const t=e.touches[0]; const p=getPos(t); drawPixel(p.x,p.y); });
+drawCanvas.addEventListener("touchmove", e => { e.preventDefault(); if(!drawing) return; const t=e.touches[0]; const p=getPos(t); drawPixel(p.x,p.y); });
+drawCanvas.addEventListener("touchend", () => drawing=false);
+
+function useDrawImage(){ img = new Image(); img.src = drawCanvas.toDataURL(); alert("描画画像を使用します"); }
+function exportImage(){ const a=document.createElement("a"); a.href=drawCanvas.toDataURL(); a.download="pattern.png"; a.click(); }
+
+function toggleDrawArea(){ drawArea.style.display = drawArea.style.display === "none" ? "block" : "none"; }
+</script>
+</body>
+</html>
